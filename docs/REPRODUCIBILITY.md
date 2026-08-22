@@ -848,36 +848,4 @@ For a publication-quality experiment, retain:
 
 Do not regenerate or edit reference labels after reviewing model performance.
 
----
 
-# 31. Recommended Paper Description
-
-A concise methodological description is:
-
-> Four open-weight instruction-tuned LLMs were evaluated using a frozen 35-item expert reference set. A deterministic character n-gram TF-IDF retriever generated a common Top-5 ELCD candidate set for each material using only the original BOM description. The retriever's similarity scores and ranking positions were withheld from the models; instead, candidates were presented in a deterministic shuffled order common to all models. Each LLM normalized the material description, ranked up to three supplied process UUIDs, and classified the result as Direct, Proxy, or Review Required. Greedy decoding at temperature 0.0 and 4-bit NF4 quantization were used. Candidate retrieval, conditional model selection, overall process selection, match classification, structured-output reliability, inference time, and repeatability were evaluated separately.
-
----
-
-# 32. Recommended Retrieval Results Description
-
-For the current frozen reference:
-
-> The deterministic retrieval stage recovered the reconciled expert process within the Top-5 candidate set for 21 of 28 matched materials (75.0%). The reference process was ranked first by TF-IDF in 11 of 28 matched cases (39.3%), providing a deterministic lexical-selection baseline. Because retrieval failures prevent downstream models from selecting the exact reference UUID, overall and conditional process-selection accuracies were reported separately.
-
----
-
-# 33. Important Experimental Rule
-
-Once formal inference begins, do not modify:
-
-```text
-scripts/benchmark_four_llms.py
-scripts/run_four_llm_benchmark.py
-scripts/prepare_benchmark_reference.py
-ELCD_Check/ELCD_Process_Catalog.xlsx
-Four_Models/Input/LLM_Model_Evaluation_Reference_Set.xlsx
-```
-
-until all four models and repeatability runs are complete.
-
-This ensures all models are evaluated under the same experimental state.
