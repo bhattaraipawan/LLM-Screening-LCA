@@ -1,363 +1,681 @@
-LLM-Assisted Upfront Embodied-Carbon Screening
+# LLM-Enhanced LCA: LLM-Assisted Material Interpretation and ELCD Process Matching
 
-Open-source workflow for BOM interpretation, openLCA process matching, and A1-A3 screening
+This repository contains the implementation and reproducibility materials for an LLM-assisted workflow for upfront whole-building life-cycle assessment (WBLCA), with particular emphasis on material interpretation and environmental process matching.
 
-This repository contains the application code and reproducibility assets for a
-research workflow that uses a locally deployable large language model (LLM) to
-assist with construction-material interpretation and environmental-process
-matching for upfront embodied-carbon screening.
+The current controlled benchmark evaluates whether open-weight large language models can support three tasks that occur before embodied-carbon calculation:
 
-The repository should be treated as a research and screening workflow, not a
-certified LCA tool. Database-grounded results, documented proxies, and any
-provisional LLM-supported values used by the main application must remain
-visibly distinguishable in the manuscript and outputs.
+1. material normalization from construction Bill of Materials (BOM) descriptions;
+2. selection of a suitable environmental process from a retrieved ELCD candidate set; and
+3. classification of the result as Direct, Proxy, or Review Required.
 
-The controlled four-model benchmark in this repository is intentionally narrower:
-it evaluates the LLM on material normalization and ELCD/openLCA process
-matching, not on direct GWP-value guessing.
+The benchmark does **not** ask the evaluated LLMs to generate emission factors, GWP values, EPDs, or environmental process UUIDs. All selectable environmental processes come from a fixed process catalog exported from openLCA.
 
-Repository status
+---
 
-The August 2026 reviewer-revision package contains:
+## 1. Repository Purpose
 
-35 BOM entries from three Nepal demonstration case studies;
+The broader framework is intended to support automated or semi-automated embodied-carbon screening from construction material inventories.
 
-an exported ELCD/openLCA process catalog containing 608 process descriptors;
+For the controlled four-model experiment included in this repository, the LLM role is deliberately restricted to:
 
-a two-expert review and reconciliation workbook;
+- interpreting construction material descriptions;
+- normalizing material names;
+- evaluating retrieved ELCD candidate processes;
+- selecting the most defensible candidate when one is available;
+- distinguishing Direct matches from Proxy matches; and
+- routing unmatched materials to Review Required.
 
-a controlled four-model benchmark for Llama, Qwen, DeepSeek, and Mistral;
+Environmental calculations are downstream of this benchmark and are not part of the model-comparison experiment.
 
-strict safeguards preventing unfinished expert labels from being scored as
-ground truth; and
+---
 
-per-model and combined Excel outputs containing predictions, metrics, prompt,
-runtime configuration, hardware information, and raw responses.
+## 2. Controlled Four-Model Benchmark
 
-The current expert-review workbook has not yet been completed. Therefore,
-Four_Models/Input/LLM_Model_Evaluation_Reference_Set.xlsx is presently marked
-PENDING_RECONCILIATION. The benchmark will refuse to run until the expert
-reference is frozen.
+Four open-weight instruction-tuned models are evaluated:
 
-See docs/REPRODUCIBILITY.md for the full protocol.
+| Model | Hugging Face checkpoint |
+|---|---|
+| Llama 3.1 8B Instruct | `meta-llama/Llama-3.1-8B-Instruct` |
+| Qwen2.5 7B Instruct | `Qwen/Qwen2.5-7B-Instruct` |
+| DeepSeek LLM 7B Chat | `deepseek-ai/deepseek-llm-7b-chat` |
+| Mistral 7B Instruct v0.3 | `mistralai/Mistral-7B-Instruct-v0.3` |
 
-Assessment scope
+The same frozen reference set, retrieval procedure, candidate pool, instructions, and inference configuration are used for all four models.
 
-The broader application focuses on upfront embodied carbon within product-stage
-modules A1-A3.
+---
 
-Module
+## 3. Expert Reference Set
 
-Product-stage activity
+The benchmark uses a reconciled 35-item expert reference set derived from the three building case studies used in the study.
 
-A1
+The final reference distribution is:
 
-Raw-material supply
+| Reference class | Number of materials |
+|---|---:|
+| Direct | 13 |
+| Proxy | 15 |
+| Review Required | 7 |
+| **Total** | **35** |
 
-A2
+### Definitions
 
-Transportation to manufacturing
+**Direct**
 
-A3
+A suitable ELCD process represents the original material or product sufficiently well for the screening application.
 
-Material manufacturing
+**Proxy**
 
-The controlled four-model benchmark does not calculate building GWP. Its
-purpose is to evaluate the language-model stages separately and reproducibly.
+An exact/direct process is not available, but a technically defensible ELCD substitute is available and selected.
 
-Controlled four-model benchmark
+**Review Required**
 
-Models
+No supplied ELCD process is considered sufficiently defensible. No final ELCD process UUID is assigned.
 
-The default checkpoints are:
+Only Review Required cases are eligible for a later fallback or manual-review stage outside the controlled model-matching benchmark.
 
-meta-llama/Llama-3.1-8B-Instruct
+---
 
-Qwen/Qwen2.5-7B-Instruct
+## 4. Independent Expert Review
 
-deepseek-ai/deepseek-llm-7b-chat
+The expert reference set was developed before model scoring.
 
-mistralai/Mistral-7B-Instruct-v0.3
+Two reviewers independently evaluated the 35 BOM materials using the same exported ELCD catalog.
 
-The benchmark records the resolved model/checkpoint revision at runtime.
+Before reconciliation, expert agreement was:
 
-What is evaluated
+| Measure | Agreement |
+|---|---:|
+| Normalized material | 25/35 = 71.4% |
+| Selected ELCD process | 23/35 = 65.7% |
+| Match type | 29/35 = 82.9% |
+| Full agreement across all three fields | 17/35 = 48.6% |
 
-For each frozen expert-reference BOM row, the experiment evaluates:
-
-material normalization;
-
-deterministic candidate-pool retrieval from the exported ELCD/openLCA
-catalog;
-
-LLM ranking of the supplied candidate processes;
-
-final process selection;
-
-Direct / Proxy / Review Required classification; and
-
-run-to-run repeatability.
-
-The LLM is restricted to the supplied process candidates. It is not allowed to
-invent process UUIDs, emission factors, GWP values, EPDs, or citations.
-
-Important methodological separation
-
-Candidate-pool retrieval is deterministic and identical for all four models.
-The benchmark therefore reports both:
-
-candidate-pool recall — whether the expert process was available to the
-LLM at all; and
-
-conditional process-selection accuracy — how often the LLM selected the
-expert process when that process was actually present in the candidate pool.
-
-This prevents a retrieval failure from being incorrectly attributed entirely to
-the LLM selection stage.
-
-Decoding
-
-The final benchmark default is greedy decoding:
-
-temperature = 0.0
-do_sample = False
-runs per sample = 5
-base seed = 42
-
-Five repeated runs are retained to document repeatability. Four-bit NF4
-quantization is enabled by default for CUDA execution and is written to the
-output metadata.
-
-Expert reference-set workflow
+Disagreements were reconciled to produce one frozen reference answer for each material before the four LLMs were evaluated.
 
 The expert workbook is located at:
 
+```text
 ELCD_Check/expert_reference/LLM_LCA_Expert_Reference_Set_With_ELCD.xlsx
+```
 
-It contains:
+The frozen machine-readable benchmark reference is generated using:
 
-Expert_A
-
-Expert_B
-
-Reconciliation
-
-ELCD_Catalog
-
-Expert A and Expert B should label the 35 BOM entries independently before
-reconciliation. Initial reviewers should not see the model outputs.
-
-For each row, the final reconciliation must contain:
-
-final normalized material;
-
-final reference process, when a defensible process exists;
-
-exact process UUID;
-
-final decision: Direct, Proxy, or Review Required; and
-
-notes where needed.
-
-A Review Required row intentionally has no final process UUID.
-
-Freeze the expert reference
-
-After reconciliation is complete, run:
-
+```bash
 python scripts/prepare_benchmark_reference.py
+```
 
-The script validates all 35 rows against the exported catalog and creates/finalizes:
+and saved as:
 
+```text
 Four_Models/Input/LLM_Model_Evaluation_Reference_Set.xlsx
+```
 
-If any expert row is incomplete or inconsistent, the script stops and lists the
-problem rows. It does not create artificial ground truth.
+---
 
-ELCD/openLCA process catalog
+## 5. ELCD Process Catalog
 
-The fixed process catalog used by the benchmark is:
+The benchmark uses a fixed catalog exported from the ELCD 3.2 database active in openLCA.
 
+Catalog location:
+
+```text
 ELCD_Check/ELCD_Process_Catalog.xlsx
+```
 
-The current file contains 608 process descriptors with UUID and process-name
-information plus available category, location, library, and process-type fields.
-It is a process-search/reference catalog, not the complete LCI database.
+The current catalog contains:
 
-To regenerate a catalog from the database currently active in openLCA:
+```text
+608 processes
+```
 
-python scripts/export_openlca_process_catalog.py --database-label "ELCD <exact version>"
+Each process contains at least:
 
-Record the exact openLCA version, database release, and LCIA configuration used
-for the final paper.
+- process UUID;
+- process name;
+- available location information; and
+- process type.
 
-Running the four-model benchmark
+The catalog contains both LCI-result and unit-process descriptors.
 
-1. Install benchmark dependencies
+The catalog is exported through the openLCA IPC interface using:
 
-pip install -r requirements-benchmark.txt
+```text
+scripts/export_openlca_process_catalog.py
+```
 
-For gated Hugging Face models such as Llama, make sure the account has model
-access and set/login with a valid Hugging Face token before loading the model.
+Before exporting the catalog, the intended ELCD 3.2 database must be active in openLCA and the IPC server must be running.
 
-2. Smoke test
+The stored database label documents the study configuration. It does not independently switch or verify the database active in openLCA.
 
-After the expert reference is FINAL:
+See:
 
-python scripts/benchmark_four_llms.py --model llama --limit 2 --runs 1
+```text
+ELCD_Check/README.md
+```
 
-3. Run each model
+for the detailed catalog and expert-reference workflow.
 
-Running models separately is convenient on Google Colab because each result is
-saved before the next model is loaded.
+---
 
-python scripts/benchmark_four_llms.py --model llama
-python scripts/benchmark_four_llms.py --model qwen
-python scripts/benchmark_four_llms.py --model deepseek
-python scripts/benchmark_four_llms.py --model mistral
+## 6. Deterministic Candidate Retrieval
 
-Alternatively, the four models can be run sequentially with:
+The four-model benchmark does not ask an LLM to search all 608 ELCD processes directly.
 
-python scripts/benchmark_four_llms.py --model all
+Instead, a deterministic retrieval stage first produces a small candidate set.
 
-4. Combine the four completed results
+The retrieval method is:
 
-python scripts/benchmark_four_llms.py --combine-results
+```text
+Character n-gram TF-IDF
+Analyzer: char_wb
+N-gram range: 3–5
+Query source: original BOM description only
+Candidate pool size: 5
+```
 
-The combined workbook is written to:
+Human reference labels and expert-normalized material names are **not used** in candidate retrieval.
 
-Four_Models/Output/combined/four_model_comparison.xlsx
+For the frozen benchmark:
 
-Benchmark outputs
+```text
+Matched Direct/Proxy materials = 28
+Expert process recovered in Top-5 = 21
+Top-5 candidate recall = 21/28 = 75.0%
+```
 
-Each model creates:
+The deterministic TF-IDF Top-1 baseline is:
 
-Four_Models/Output/<model>/benchmark_results.xlsx
+```text
+11/28 = 39.3%
+```
 
-with these sheets:
+This Top-1 result provides a non-LLM baseline against which the LLM reranking/selection stage can be compared.
 
-Predictions — row/run-level model outputs and scoring fields;
+---
 
-Metrics — model-level benchmark statistics;
+## 7. Candidate Presentation to the LLM
 
-Metadata — model ID/revision, prompt settings, seed, quantization, software,
-GPU, and timing information; and
+TF-IDF is used to determine which five processes belong in the candidate pool.
 
-Prompt — the exact system prompt and user-prompt template.
+However, the LLM is **not shown**:
 
-The benchmark reports, among other fields:
+- the TF-IDF similarity score; or
+- the original TF-IDF ranking position.
 
-valid/failed response rate;
+Before presentation to the model, the five candidates are placed in a deterministic shuffled order.
 
-normalization exact accuracy;
+The same candidate set and same presentation order are used for all four models.
 
-mean normalization similarity;
+This separates:
 
-candidate-pool recall;
+```text
+Retrieval
+    ↓
+TF-IDF identifies the candidate set
 
-Top-1 / Top-3 / Top-5 / Top-10 ranking performance;
+from
 
-mean reciprocal rank;
+Selection
+    ↓
+LLM independently evaluates the supplied candidate processes
+```
 
-final process-selection accuracy for matched rows;
+This design allows LLM selection performance to be compared with the TF-IDF-only Top-1 baseline without encouraging the LLM simply to accept the retriever's first-ranked process.
 
-process-selection accuracy conditional on the ground-truth process being in
-the candidate pool;
+---
 
-Direct / Proxy / Review Required accuracy;
+## 8. LLM Output Task
 
-Review Required binary accuracy;
+For each material, the model is instructed to:
 
-end-to-end reference accuracy;
+1. produce a concise normalized material name;
+2. rank up to three supplied process UUIDs;
+3. classify the result as:
+   - Direct,
+   - Proxy, or
+   - Review Required.
 
-macro F1; and
+The model may only use UUIDs contained in the supplied candidate set.
 
-run-to-run selection, normalization, and match-type agreement.
+It may not invent:
 
-Malformed JSON, invalid candidate UUIDs, inconsistent rankings, and other schema
-violations are recorded as failures. A failed response is never rewarded as a
-correct Review Required prediction.
+- process UUIDs;
+- emission factors;
+- GWP values;
+- EPDs;
+- database records; or
+- environmental values.
 
-Project layout
+For Review Required cases, no selected process UUID is returned.
 
-.
-├── app/
-│   ├── controllers/
-│   ├── core/
-│   ├── models/
-│   ├── routes/
-│   ├── services/
-│   ├── templates/
-│   └── utils/
-├── docs/
-│   └── REPRODUCIBILITY.md
+---
+
+## 9. Final Benchmark Configuration
+
+The formal benchmark configuration is:
+
+| Parameter | Setting |
+|---|---|
+| Benchmark materials | 35 |
+| Candidate pool | 5 |
+| LLM ranked output | Top 3 |
+| Temperature | 0.0 |
+| Decoding | Greedy |
+| Sampling | `do_sample=False` |
+| Maximum new tokens | 256 |
+| Quantization | 4-bit NF4 |
+| Main seed | 42 |
+| Main runs per material | 1 |
+| Repeatability subset | 12 materials |
+| Additional repeatability pass | 1 |
+
+The repeatability subset contains:
+
+```text
+4 Direct
+4 Proxy
+4 Review Required
+```
+
+### Number of formal responses
+
+Main experiment:
+
+```text
+35 materials × 4 models = 140 responses
+```
+
+Repeatability experiment:
+
+```text
+12 materials × 4 models × 1 additional pass = 48 responses
+```
+
+Total:
+
+```text
+140 + 48 = 188 formal LLM responses
+```
+
+---
+
+## 10. Why Only One Main Run?
+
+The formal benchmark uses deterministic greedy decoding at temperature 0.0.
+
+Under this configuration, five repeated inference passes for every material would provide limited additional information while substantially increasing computation.
+
+Instead, repeatability is evaluated using one additional pass on a fixed balanced 12-item subset.
+
+Repeatability reporting includes response validity so that repeated invalid outputs are not counted as successful agreement.
+
+Because greedy decoding is used, this analysis should be interpreted primarily as test-retest or deterministic inference stability rather than stochastic sampling variability.
+
+---
+
+## 11. Evaluation Metrics
+
+The benchmark separates retrieval performance from LLM performance.
+
+### Material normalization
+
+Reported metrics include:
+
+- exact normalization accuracy;
+- normalized-name similarity.
+
+### Candidate retrieval
+
+Reported independently of the LLM:
+
+- candidate-pool recall;
+- TF-IDF Top-1 baseline.
+
+### Process ranking
+
+Reported for matched Direct/Proxy rows:
+
+- Top-1 ranking accuracy;
+- Top-3 ranking recall;
+- mean reciprocal rank.
+
+### Final process selection
+
+Two process-selection metrics are particularly important.
+
+**Overall process-selection accuracy**
+
+Evaluates process selection over all matched Direct/Proxy reference materials.
+
+This metric includes failures caused by both candidate retrieval and LLM selection.
+
+**Conditional process-selection accuracy**
+
+Evaluates the LLM only for cases in which the expert-reference process was actually present in the candidate pool.
+
+This separates LLM selection ability from upstream retrieval failure.
+
+### Match classification
+
+Reported metrics include:
+
+- Direct/Proxy/Review Required accuracy;
+- Review Required binary accuracy;
+- Review Required precision;
+- Review Required recall;
+- Review Required F1.
+
+### Reliability
+
+The workbooks also report:
+
+- structured-output validity;
+- failed-response rate;
+- generated token count;
+- token-limit indicators;
+- inference time; and
+- repeatability/stability.
+
+---
+
+## 12. Repository Structure
+
+The relevant benchmark structure is:
+
+```text
+LLM-Screening-LCA/
+│
 ├── ELCD_Check/
 │   ├── ELCD_Process_Catalog.xlsx
 │   ├── README.md
 │   └── expert_reference/
 │       └── LLM_LCA_Expert_Reference_Set_With_ELCD.xlsx
+│
 ├── Four_Models/
 │   ├── README.md
 │   ├── Input/
 │   │   └── LLM_Model_Evaluation_Reference_Set.xlsx
 │   └── Output/
-│       └── README.md
+│       ├── llama/
+│       ├── qwen/
+│       ├── deepseek/
+│       ├── mistral/
+│       ├── combined/
+│       ├── repeatability/
+│       └── smoke/
+│
 ├── scripts/
-│   ├── benchmark_four_llms.py
+│   ├── export_openlca_process_catalog.py
 │   ├── prepare_benchmark_reference.py
-│   └── export_openlca_process_catalog.py
-├── tests/
-│   └── test_model_benchmark.py
-├── main.py
-├── requirements.txt
-├── requirements-llama.txt
-└── requirements-benchmark.txt
+│   ├── benchmark_four_llms.py
+│   └── run_four_llm_benchmark.py
+│
+├── docs/
+│   └── REPRODUCIBILITY.md
+│
+├── requirements-benchmark.txt
+└── README.md
+```
 
-The main application and its embodied-carbon calculation workflow are separate
-from this controlled benchmark and can be revised independently without changing
-the frozen benchmark protocol.
+---
 
-Main application
+## 13. Installation
 
-Install the main application requirements and start FastAPI with:
+A CUDA-capable environment is recommended for the four-model benchmark.
 
-pip install -r requirements.txt
-python main.py
+For Google Colab:
 
-The application uses the database currently active in openLCA through its IPC
-server. The main application logic is not used to manufacture benchmark ground
-truth.
+```bash
+pip install -r requirements-benchmark.txt
+```
 
-Tests
+The benchmark uses Hugging Face Transformers and 4-bit NF4 loading.
 
-Run repository tests with:
+Access to gated model repositories must be configured before inference where required.
 
-python -m unittest discover -s tests -v
+For example, Llama access may require an approved Hugging Face account and authentication token.
 
-The benchmark-specific tests include checks that:
+---
 
-deterministic candidate retrieval is stable;
+## 14. Prepare the Frozen Reference Set
 
-the selected process is not silently inserted into the model's returned
-ranking;
+Generate the benchmark input from the reconciled expert workbook:
 
-malformed responses are not counted as correct unresolved predictions; and
+```bash
+python scripts/prepare_benchmark_reference.py
+```
 
-conditional process-selection scoring is separated from candidate retrieval.
+This creates:
 
-Research-use notes
+```text
+Four_Models/Input/LLM_Model_Evaluation_Reference_Set.xlsx
+```
 
-The three Nepal buildings are demonstration cases rather than comprehensive
-external validation cases.
+The preparation script validates the expert reference before freezing it.
 
-The expert reference set must be frozen before model scoring.
+---
 
-Commercial-platform comparisons should be described as reference/comparative
-comparisons rather than absolute ground truth.
+## 15. Validate Inputs Without Loading an LLM
 
-Database-backed coverage and successful numerical BOM processing are separate
-concepts.
+Run:
 
-Exact model IDs/revisions, prompt, decoding settings, number of runs,
-quantization, hardware, software versions, openLCA version, database release,
-and LCIA method should be reported in the final paper.
+```bash
+python scripts/benchmark_four_llms.py --check-inputs
+```
+
+For the current reference set, the expected summary is approximately:
+
+```text
+Catalog processes: 608
+Reference rows: 35
+Matched Direct/Proxy rows: 28
+Review Required rows: 7
+Candidate-pool recall at Top-5: 21/28 (75.0%)
+TF-IDF Top-1 baseline: 11/28 (39.3%)
+```
+
+This step does not load an LLM.
+
+---
+
+## 16. Smoke Test
+
+Before the formal benchmark, run:
+
+```bash
+python scripts/run_four_llm_benchmark.py --smoke
+```
+
+The smoke test uses a small subset and writes to a separate smoke-output directory so that smoke-test results do not overwrite formal benchmark workbooks.
+
+---
+
+## 17. Run the Complete Four-Model Benchmark
+
+Run:
+
+```bash
+python scripts/run_four_llm_benchmark.py
+```
+
+The runner:
+
+1. prepares/validates the frozen reference;
+2. validates the ELCD catalog;
+3. runs Llama;
+4. runs Qwen;
+5. runs DeepSeek;
+6. runs Mistral;
+7. runs the fixed repeatability subset; and
+8. creates combined Excel results.
+
+Each model is executed in a separate subprocess so GPU memory can be released before the next model is loaded.
+
+---
+
+## 18. Output Workbooks
+
+Formal model results are written under:
+
+```text
+Four_Models/Output/
+```
+
+Typical structure:
+
+```text
+Four_Models/Output/
+├── llama/
+│   └── benchmark_results.xlsx
+├── qwen/
+│   └── benchmark_results.xlsx
+├── deepseek/
+│   └── benchmark_results.xlsx
+├── mistral/
+│   └── benchmark_results.xlsx
+├── combined/
+│   └── four_model_comparison.xlsx
+└── repeatability/
+    ├── llama/
+    ├── qwen/
+    ├── deepseek/
+    ├── mistral/
+    └── repeatability_check.xlsx
+```
+
+Smoke-test workbooks are stored separately under:
+
+```text
+Four_Models/Output/smoke/
+```
+
+---
+
+## 19. Reproducibility Metadata
+
+Each formal model workbook records available provenance information such as:
+
+- exact model checkpoint;
+- model revision;
+- tokenizer revision;
+- benchmark script version;
+- prompt hash;
+- ELCD catalog hash;
+- frozen benchmark-reference hash;
+- candidate-pool configuration;
+- candidate-presentation method;
+- seed;
+- temperature;
+- decoding configuration;
+- maximum generated tokens;
+- quantization configuration;
+- GPU information;
+- CUDA version;
+- Python version;
+- PyTorch version;
+- Transformers version;
+- Accelerate version;
+- BitsAndBytes version;
+- inference time;
+- generated-token count; and
+- token-limit status.
+
+See:
+
+```text
+docs/REPRODUCIBILITY.md
+```
+
+for additional details.
+
+---
+
+## 20. Important Methodological Interpretation
+
+A failed retrieval and a failed LLM selection are not the same error.
+
+For example:
+
+```text
+Original BOM material
+        ↓
+TF-IDF retrieval
+        ↓
+Is expert process in Top-5?
+        ↓
+YES                         NO
+ ↓                           ↓
+LLM can select it       LLM cannot select the
+                        exact expert UUID
+```
+
+For this reason, both overall and conditional process-selection metrics are reported.
+
+The benchmark therefore evaluates the complete pipeline while still distinguishing the contribution and limitation of its retrieval component.
+
+---
+
+## 21. Current Retrieval Limitation
+
+Increasing the candidate pool beyond five did not improve expert-reference process coverage for the current dataset.
+
+The Top-5 pool recovered:
+
+```text
+21/28 = 75.0%
+```
+
+of matched reference processes.
+
+A diagnostic Top-20 retrieval test recovered the same:
+
+```text
+21/28 = 75.0%
+```
+
+The remaining unmatched reference-process relationships are primarily semantic proxy relationships rather than simple lexical matches.
+
+For this reason, Top-5 is retained as the formal benchmark configuration.
+
+No post-hoc synonym dictionary derived from the expert answers is introduced, because doing so could leak reference information into the retrieval stage.
+
+---
+
+## 22. Scope
+
+The controlled model benchmark evaluates LLM-assisted material interpretation and environmental-process matching.
+
+It should not be interpreted as an evaluation of:
+
+- complete LCA accuracy;
+- environmental database quality;
+- product-specific EPD accuracy;
+- geographic representativeness of ELCD;
+- downstream openLCA impact calculations; or
+- the accuracy of LLM-generated emission factors.
+
+These are separate methodological questions.
+
+---
+
+## 23. Reproducibility
+
+Detailed instructions are provided in:
+
+```text
+docs/REPRODUCIBILITY.md
+```
+
+The repository is intended to preserve the distinction between:
+
+```text
+Expert reference creation
+        ↓
+Deterministic retrieval
+        ↓
+LLM interpretation and selection
+        ↓
+Downstream environmental calculation
+```
+
+This separation is central to the experimental design.
